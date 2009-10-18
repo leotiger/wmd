@@ -97,7 +97,6 @@ this.makeHtml = function(text) {
 // _EscapeSpecialCharsWithinTagAttributes(), so that any *'s or _'s in the <a>
 // and <img> tags get encoded.
 //
-
 	// Clear the global hashes. If we don't clear these, you get conflicts
 	// from other articles when generating a page which contains more than
 	// one article (e.g. an index page that shows the N most recent
@@ -106,6 +105,8 @@ this.makeHtml = function(text) {
 	g_titles = new Array();
 	g_html_blocks = new Array();
 
+
+    
 	// attacklab: Replace ~ with ~T
 	// This lets us use tilde as an escape char to avoid md5 hashes
 	// The choice of character is arbitray; anything that isn't
@@ -133,11 +134,20 @@ this.makeHtml = function(text) {
 	// contorted like /[ \t]*\n+/ .
 	text = text.replace(/^[ \t]+$/mg,"");
 
+    //text = text.replace(/([\w\d])_([\w\d])([^@])/g,"$1\\_$2$3");
+    
+    
+    text = _StripLinkDefinitions(text);
+
+    //now preserve underscores inside of words.
+    text = text.replace(/([\w\d]+)_([\w\d]+)/g, preserveInnerUnderscores);
+
 	// Turn block-level HTML blocks into hash entries
+	
 	text = _HashHTMLBlocks(text);
 
 	// Strip link definitions, store in hashes.
-	text = _StripLinkDefinitions(text);
+	
 
 	text = _RunBlockGamut(text);
 
@@ -148,7 +158,8 @@ this.makeHtml = function(text) {
 
 	// attacklab: Restore tildes
 	text = text.replace(/~T/g,"~");
-
+    //text = HTMLtoDOMSmartyPants("<div>" + text + "</div>");
+    text = _RunSmartyPants(text);
 	return text;
 }
 
@@ -201,6 +212,11 @@ var _StripLinkDefinitions = function(text) {
 	return text;
 }
 
+var _HashExcludeSmartyPants = function(text)
+{
+
+}
+
 var _HashHTMLBlocks = function(text) {
 	// attacklab: Double up blank lines to reduce lookaround
 	text = text.replace(/\n/g,"\n\n");
@@ -241,7 +257,10 @@ var _HashHTMLBlocks = function(text) {
 		)						// attacklab: there are sentinel newlines at end of document
 		/gm,function(){...}};
 	*/
-	text = text.replace(/^(<(p|div|h[1-6]|blockquote|pre|table|dl|ol|ul|script|noscript|form|fieldset|iframe|math|ins|del)\b[^\r]*?\n<\/\2>[ \t]*(?=\n+))/gm,hashElement);
+	text = text.replace(/^(<(code|kbd|pre|script|noscript|iframe|math|ins|del)\b[^\r]*?\n<\/\2>[ \t]*(?=\n+))/gm,hashElement);
+	
+	/*process text parts correctly with markdown*/	
+	text = text.replace(/^(<(p|div|h[1-6]|blockquote|table|dl|ol|ul|form|fieldset)\b[^\r]*?\n<\/\2>[ \t]*(?=\n+))/gm,hashAndCashElement);
 
 	//
 	// Now match more liberally, simply from `\n<tag>` to `</tag>\n`
@@ -281,6 +300,26 @@ var _HashHTMLBlocks = function(text) {
 		/g,hashElement);
 	*/
 	text = text.replace(/(\n[ ]{0,3}(<(hr)\b([^<>])*?\/?>)[ \t]*(?=\n{2,}))/g,hashElement);
+
+	// Special case just for <img />. It was easier to make a special case than
+	// to make the other regex more complicated.  
+
+	/*
+		text = text.replace(/
+		(						// save in $1
+			\n\n				// Starting after a blank line
+			[ ]{0,3}
+			(<(img)				// start tag = $2
+			\b					// word break
+			([^<>])*?			// 
+			\/?>)				// the matching end tag
+			[ \t]*
+			(?=\n{2,})			// followed by a blank line
+		)
+		/g,hashElement);
+	*/
+	//text = text.replace(/(([ \t\n])*<(img)\b([^<>])*?\/?>([ \t\n])*)/g,hashElement);
+
 
 	// Special case for standalone HTML comments:
 
@@ -325,21 +364,65 @@ var _HashHTMLBlocks = function(text) {
 	return text;
 }
 
+var preserveInnerUnderscores = function(wholeMatch, m1, m2)
+{
+    
+    m1 = m1.replace(/([\w\d]+)_([\w\d]+)/g, preserveInnerUnderscores);
+    m2 = m2.replace(/([\w\d]+)_([\w\d]+)/g, preserveInnerUnderscores);
+    return m1 + "\\_" + m2;
+};
+
+
 var hashElement = function(wholeMatch,m1) {
+
+
 	var blockText = m1;
 
 	// Undo double lines
 	blockText = blockText.replace(/\n\n/g,"\n");
 	blockText = blockText.replace(/^\n/,"");
-	
 	// strip trailing blank lines
 	blockText = blockText.replace(/\n+$/g,"");
-	
+
+
 	// Replace the element text with a marker ("~KxK" where x is its key)
 	blockText = "\n\n~K" + (g_html_blocks.push(blockText)-1) + "K\n\n";
 	
 	return blockText;
 };
+
+var hashAndCashElement = function(wholeMatch,m1) {
+
+
+	var blockText = m1;
+
+	// Undo double lines
+	blockText = blockText.replace(/\n\n/g,"\n");
+	blockText = blockText.replace(/^\n/,"");
+	// strip trailing blank lines
+	blockText = blockText.replace(/\n+$/g,"");
+
+    /*test block level transformations*/
+	/*blockText = _StripLinkDefinitions(blockText);*/
+    
+    //text = _FormParagraphs(text);
+	blockText = _RunBlockGamut(blockText);
+	
+	
+
+	blockText = _UnescapeSpecialChars(blockText);
+
+
+	/*test end*/
+
+	
+
+	// Replace the element text with a marker ("~KxK" where x is its key)
+	blockText = "\n\n~K" + (g_html_blocks.push(blockText)-1) + "K\n\n";
+	
+	return blockText;
+};
+
 
 var _RunBlockGamut = function(text) {
 //
@@ -379,6 +462,7 @@ var _RunSpanGamut = function(text) {
 	text = _EscapeSpecialCharsWithinTagAttributes(text);
 	text = _EncodeBackslashEscapes(text);
 
+    
 	// Process anchor and image tags. Images must come first,
 	// because ![foo][f] looks like an anchor.
 	text = _DoImages(text);
@@ -390,9 +474,11 @@ var _RunSpanGamut = function(text) {
 	text = _DoAutoLinks(text);
 	text = _EncodeAmpsAndAngles(text);
 	text = _DoItalicsAndBold(text);
-
+    
 	// Do hard breaks:
 	text = text.replace(/  +\n/g," <br />\n");
+	// Do special hard breaks
+	text = text.replace(/([^\n>]|<\/b>|<\/i>|<\/strong>|<\/em>|<\/a>)\n([^\n])/g,"$1<br />\n$2");
 
 	return text;
 }
@@ -531,14 +617,27 @@ var writeAnchorTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 			}
 		}
 	}	
-	
+	var result = "";
 	url = escapeCharacters(url,"*_");
-	var result = "<a href=\"" + url + "\"";
+	if (url.search(/javascript/i) > -1)
+	{
+	    result = "<a href=\"" + url;// + "(" +  + "\"";
+	    if (title != "") {
+		    title = title.replace(/"/g,"&quot;");
+		    title = escapeCharacters(title,"*_");
+		    result += "(" + title + ")\"";
+	    }
+	    
+	}
+	else
+	{
+	    result = "<a href=\"" + url + "\"";
 	
-	if (title != "") {
-		title = title.replace(/"/g,"&quot;");
-		title = escapeCharacters(title,"*_");
-		result +=  " title=\"" + title + "\"";
+	    if (title != "") {
+		    title = title.replace(/"/g,"&quot;");
+		    title = escapeCharacters(title,"*_");
+		    result +=  " title=\"" + title + "\"";
+	    }
 	}
 	
 	result += ">" + link_text + "</a>";
@@ -729,12 +828,12 @@ var _DoLists = function(text) {
 			)
 		)/g
 	*/
-	var whole_list = /^(([ ]{0,3}([*+-]|\d+[.])[ \t]+)[^\r]+?(~0|\n{2,}(?=\S)(?![ \t]*(?:[*+-]|\d+[.])[ \t]+)))/gm;
+	var whole_list = /^(([ ]{0,3}([*+\-]|\d+[.])[ \t]+)[^\r]+?(~0|\n{2,}(?=\S)(?![ \t]*(?:[*+\-]|\d+[.])[ \t]+)))/gm;
 
 	if (g_list_level) {
 		text = text.replace(whole_list,function(wholeMatch,m1,m2) {
 			var list = m1;
-			var list_type = (m2.search(/[*+-]/g)>-1) ? "ul" : "ol";
+			var list_type = (m2.search(/[*+\-]/g)>-1) ? "ul" : "ol";
 
 			// Turn double returns into triple returns, so that we can make a
 			// paragraph for the last item in a list, if necessary:
@@ -750,12 +849,12 @@ var _DoLists = function(text) {
 			return result;
 		});
 	} else {
-		whole_list = /(\n\n|^\n?)(([ ]{0,3}([*+-]|\d+[.])[ \t]+)[^\r]+?(~0|\n{2,}(?=\S)(?![ \t]*(?:[*+-]|\d+[.])[ \t]+)))/g;
+		whole_list = /(\n\n|^\n?)(([ ]{0,3}([*+\-]|\d+[.])[ \t]+)[^\r]+?(~0|\n{2,}(?=\S)(?![ \t]*(?:[*+\-]|\d+[.])[ \t]+)))/g;
 		text = text.replace(whole_list,function(wholeMatch,m1,m2,m3) {
 			var runup = m1;
 			var list = m2;
 
-			var list_type = (m3.search(/[*+-]/g)>-1) ? "ul" : "ol";
+			var list_type = (m3.search(/[*+\-]/g)>-1) ? "ul" : "ol";
 			// Turn double returns into triple returns, so that we can make a
 			// paragraph for the last item in a list, if necessary:
 			var list = list.replace(/\n{2,}/g,"\n\n\n");;
@@ -815,7 +914,7 @@ _ProcessListItems = function(list_str) {
 			(?= \n* (~0 | \2 ([*+-]|\d+[.]) [ \t]+))
 		/gm, function(){...});
 	*/
-	list_str = list_str.replace(/(\n)?(^[ \t]*)([*+-]|\d+[.])[ \t]+([^\r]+?(\n{1,2}))(?=\n*(~0|\2([*+-]|\d+[.])[ \t]+))/gm,
+	list_str = list_str.replace(/(\n)?(^[ \t]*)([*+\-]|\d+[.])[ \t]+([^\r]+?(\n{1,2}))(?=\n*(~0|\2([*+\-]|\d+[.])[ \t]+))/gm,
 		function(wholeMatch,m1,m2,m3,m4){
 			var item = m4;
 			var leading_line = m1;
@@ -978,12 +1077,105 @@ var _EncodeCode = function(text) {
 var _DoItalicsAndBold = function(text) {
 
 	// <strong> must go first:
-	text = text.replace(/(\*\*|__)(?=\S)([^\r]*?\S[\*_]*)\1/g,
+	text = text.replace(/(\*\*|__)(?=\S)([^\r\@]*?\S[\*_]*)\1/g,
 		"<strong>$2</strong>");
 
-	text = text.replace(/(\*|_)(?=\S)([^\r]*?\S)\1/g,
+	text = text.replace(/(\*|_)(?=\S)([^\r\@]*?\S)\1/g,
 		"<em>$2</em>");
 
+	return text;
+}
+
+
+var markPants = function(wholeMatch,m1) {
+
+
+	var blockText = m1;
+
+	// Undo double lines
+	blockText = blockText.replace(/\n\n/g,"\n");
+	blockText = blockText.replace(/^\n/,"");
+	// strip trailing blank lines
+	blockText = blockText.replace(/\n+$/g,"");
+	return blockText;
+};
+
+var educatePants = function(wholeMatch,m1,m2,m3,m4,m5,m6) {
+
+    
+	var blockText = m5;
+    if (m5.search(/(<([a-zA-Z1-6]*)([^\r>]?)(>)([^\r]*?)(<\/\2>))/mg)>-1)
+    {
+        //alert(blockText);
+        blockText = blockText.replace(/(<)([a-zA-Z1-6]*)([^\r>]?)(>)([^\r]*?)(<\/\2>)/mg, educatePants);
+        
+    }
+    if (m5.search(/(<([a-zA-Z1-6]*)([^\r>]?)(>)([^\r]*?)(<\/\2>))/g)>-1)
+        blockText = blockText.replace(/(<)([a-zA-Z1-6]*)([^\r>]?)(>)([^\r]*?)(<\/\2>)/g, educatePants);
+    else blockText = _applyPants(blockText);
+	return m1 + m2 + m3 + m4 + blockText + m6;
+};
+
+
+var _applyImgPant = function(wholeMatch, m1)
+{
+
+    var blockText = m1;
+    //blockText = m1.replace(/\/>/g, "</img>");// + "</img>";	
+    blockText = blockText.replace(/&\#8220;/g, "\"");
+    blockText = blockText.replace(/&\#8221;/g, "\"");
+    blockText = blockText.replace(/&\#8216;/g, "'");
+    blockText = blockText.replace(/&\#8217;/g, "'");
+    blockText = blockText.replace(/&\#8230;/g, "...");
+    
+    return blockText;
+}
+
+var _applyPants = function(text)
+{
+        
+        text = text.replace (/^\x27(?=[!\x22#\$\%\x27()*+,\-.\/:;<=>?\@\[\\]\^_`{|}~]\B)/g, "&#8216;");
+        text = text.replace (/^\x22(?=[!\x22#\$\%\x27()*+,\-.\/:;<=>?\@\[\\]\^_`{|}~]\B)/g, "&#8220;");
+        text = text.replace(/^\x22(?=\w)/g, "&#8220;");
+        text = text.replace(/^\x27(?=\w)/g, "&#8216;");
+        
+        text = text.replace(/\x22\x27(?=\w)/g, "&#8220;&#8216;");
+        text = text.replace(/\x27\x22(?=\w)/g, "&#8216;&#8220;");
+
+        // 	Special case for decade abbreviations (the '80s):
+        text = text.replace(/\x27(?=\d{2}s)/g, "&#8217;");
+
+
+        text = text.replace(/(>|\t|\n|\s|&nbsp;|--|&[mn]dash;|&\#8211;|&\#8212;|&\#x201[34];)\x27(?=\w)/g, "$1&#8216;");
+        
+        text = text.replace(/([^<>\\ \t\r\n\[\{\(\-])\x27(?=\s | s\b)/g, "$1&#8217;");
+        
+
+	    // Any remaining single quotes should be opening ones:
+        text = text.replace (/\x27/g, "&#8217;");
+
+        text = text.replace(/(>|\t|\n|\s|&nbsp;|--|&[mn]dash;|&\#8211;|&\#8212;|&\#x201[34];)\x22(?=\w)/g, "$1&#8220;");
+
+        text = text.replace (/([^<>\\ \t\r\n\[\{\(\-])\x22(?=\s | s\b)/g, "$1&#8221;");
+        
+        
+        text = text.replace (/\x22/ig, "&#8221;");
+        text.replace(/\.\.\./g, "&#8230;").replace (/\.\s\.\s\./g, "&#8230;");
+        return text;
+
+}
+
+var _RunSmartyPants = function(text) {
+	
+    
+    text = text.replace(/^(<([a-zA-Z1-6]*)[^\r]?\n<\/\2>[ \t]*(?=\n+))/gm,markPants);
+	text = text.replace(/(<)([a-zA-Z1-6]*)([^\r>]?)(>)([^\r]*?)(<\/\2>)/gm, educatePants);
+	//clean everything inside html tags
+	text = text.replace(/(<([a-zA-Z1-6]*)\b([^\r>]*?)(\/)?>)/g, _applyImgPant);
+	//clean out replacements inside special tags
+	text = text.replace(/((<)(code|kbd|pre|script|noscript|iframe|math|ins|del|pre)([^\r]?)(>)([^\r]*?)(<\/)(code|kbd|pre|script|noscript|iframe|math|ins|del|pre)(>))/gm, _applyImgPant);
+
+    	
 	return text;
 }
 
@@ -1061,7 +1253,9 @@ var _FormParagraphs = function(text) {
 			grafsOut.push(str);
 		}
 		else if (str.search(/\S/) >= 0) {
+		    
 			str = _RunSpanGamut(str);
+			
 			str = str.replace(/^([ \t]*)/g,"<p>");
 			str += "</p>"
 			grafsOut.push(str);
@@ -1117,15 +1311,18 @@ var _EncodeBackslashEscapes = function(text) {
 	// as an optimization for Firefox.  This function gets called a LOT.
 
 	text = text.replace(/\\(\\)/g,escapeCharacters_callback);
-	text = text.replace(/\\([`*_{}\[\]()>#+-.!])/g,escapeCharacters_callback);
+	text = text.replace(/\\([`*_{}\[\]()>#+\-.!])/g,escapeCharacters_callback);
 	return text;
 }
 
 
 var _DoAutoLinks = function(text) {
 
-	text = text.replace(/<((https?|ftp|dict):[^'">\s]+)>/gi,"<a href=\"$1\">$1</a>");
+	//text = text.replace(/<((https?|ftp|dict):[^'">\s]+)>/gi,"<a href=\"$1\">$1</a>");
 
+	// process other links not defined via markup definitions to make life easier for people
+	text = text.replace(/(\s|\n|<)((https?|ftp|dict):[^'">\s]+)(\s|\n|>)/gi,"$1<a href=\"$2\">$2</a>$4");
+    
 	// Email addresses: <address@domain.foo>
 
 	/*
@@ -1140,11 +1337,21 @@ var _DoAutoLinks = function(text) {
 			>
 		/gi, _DoAutoLinks_callback());
 	*/
-	text = text.replace(/<(?:mailto:)?([-.\w]+\@[-a-z0-9]+(\.[-a-z0-9]+)*\.[a-z]+)>/gi,
+	/*
+	text = text.replace(/<(?:mailto:)?([\-\.\_a-z0-9\\]+\@[\-a-z0-9\_\\]+(\.[\-a-z0-9\_\\]+)*\.[a-z]{2,6})>/gi,
 		function(wholeMatch,m1) {
-			return _EncodeEmailAddress( _UnescapeSpecialChars(m1) );
+			return _EncodeEmailAddress( _UnescapeSpecialChars(m1.replace(/[\\]/g,"")) );
 		}
 	);
+    */
+    // process other emails not defined with markup to make life easier for people
+	//text = text.replace(/(\s|\n|<)(?:mailto:)?([\x5f\-\.a-z0-9\\]+\@[\x5f\-a-z0-9\\]+(\.[\x5f\-a-z0-9\\]+)*\.[a-z]{2,6})(\s|\n|>)/gi,
+    text = text.replace(/(\s|\n|<)(?:mailto:)?([^'">\s]+\@[^'">\s]+(\.[^'">\s]+)*\.[a-z]{2,6})(\s|\n|>)/gi,	
+		function(wholeMatch,m1,m2,m4,m5) {
+			return ((m1 != "<") ? m1 : "") + _EncodeEmailAddress( _UnescapeSpecialChars(m2.replace(/[\\]/g,"")) ) + ((m5 != ">") ? m5 : "");
+		}
+	);
+
 
 	return text;
 }
@@ -1275,15 +1482,16 @@ var _Detab = function(text) {
 var escapeCharacters = function(text, charsToEscape, afterBackslash) {
 	// First we have to escape the escape characters so that
 	// we can build a character class out of them
-	var regexString = "([" + charsToEscape.replace(/([\[\]\\])/g,"\\$1") + "])";
-
+	//alert(text + "\n" + charsToEscape.replace(/([\[\]\\])/g,"\\$1"));
+	var regexString = "([" + charsToEscape.replace(/([\[\]\\])/g,"\\$1").replace(/\\\\/g,"\\") + "])";
+    
 	if (afterBackslash) {
 		regexString = "\\\\" + regexString;
 	}
 
 	var regex = new RegExp(regexString,"g");
 	text = text.replace(regex,escapeCharacters_callback);
-
+    
 	return text;
 }
 
