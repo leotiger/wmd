@@ -1,3 +1,8 @@
+//edContext: I update this from within some functions
+//maybe you find some use for it as well
+//if not you may delete it and all references
+
+edContext = "";
 var Attacklab = Attacklab || {};
 
 Attacklab.wmdBase = function(attBase){
@@ -28,6 +33,12 @@ Attacklab.wmdBase = function(attBase){
 	global.isKonqueror 	= /konqueror/.test(nav.userAgent.toLowerCase());
     global.isFirefox 	= /firefox/.test(nav.userAgent.toLowerCase());
 	
+	global.insertChar   = "";
+	global.fileCons = "";
+	global.isImage = false;
+	global.killHandle
+    global.gbloadwin;	
+    global.edContext = "";
 	
 	// -------------------------------------------------------------------
 	//  YOUR CHANGES GO HERE
@@ -38,8 +49,8 @@ Attacklab.wmdBase = function(attBase){
 	
 	// The text that appears on the upper part of the dialog box when
 	// entering links.
-	var imageDialogText = "<p style='margin-top: 0px'><b>Enter the image URL.</b></p><p>You can also add a title, which will be displayed as a tool tip.</p><p>Example:<br />http://wmd-editor.com/images/cloud1.jpg   \"Optional title\"</p>";
-	var linkDialogText = "<p style='margin-top: 0px'><b>Enter the web address.</b></p><p>You can also add a title, which will be displayed as a tool tip.</p><p>Example:<br />http://wmd-editor.com/   \"Optional title\"</p>";
+	var imageDialogText = "<p style='margin-top: 0px'><b>Faciliteu URL imatge extern.</b></p><p>Es pot afegir un títol. El títol es mostrará com pop-up.</p><p>Mostra:<br />http://wmd-editor.com/images/cloud1.jpg   \"Títol opcional\"</p>";
+	var linkDialogText = "<p style='margin-top: 0px'><b>Faciliteu la direcció de un web extern.</b></p><p>Es pot afegir un títol. El títol es mostrará com pop-up.</p><p>Mostra:<br />http://wmd-editor.com/   \"Títol opcional\"</p>";
 	
 	// The default text that appears in the dialog input box when entering
 	// links.
@@ -178,6 +189,7 @@ Attacklab.wmdBase = function(attBase){
 		return new RegExp(pattern, flags);
 	}
 
+
 	
 	// Sets the image for a button passed to the WMD editor.
 	// Returns a new element with the image attached.
@@ -193,6 +205,37 @@ Attacklab.wmdBase = function(attBase){
 		return elem;
 	};
 	
+
+    util.extern = function(insSpecChr)
+    {
+        global.insertChar = "";
+        var myRetFunc = function()
+        {
+            if (global.insertChar != "") insSpecChr(global.insertChar);
+        };
+        edContext = global.edContext;
+        //Hook your function here: I used greybox to load a character map for example that allows to escape reserved markdown characters (+_[] etc.) and extended characters
+        //in your function page you have access to the global.insertChar for example using the attacklab object returned by the constructor...
+        //top.GB_show('Caràcters especials...', wikiJSTrans + '?ruri=' + escape(wikiInject + 'editor/specialchar.html') + '&cb=jCallBack&uuid=' + new Date().getTime(), 500, 500, myRetFunc);
+        return false;
+    }
+    
+    
+    util.filemanager = function(insFile)
+    {
+        global.fileCons = "";
+        global.isImage = false;
+        var myRetFunc = function()
+        {
+            if (global.fileCons != "") insFile(global.fileCons, global.isImage);
+        };
+        //alert(wikiFPath
+        edContext = global.edContext;
+        //Hook your function here: I used greybox to load files uploaded by the user and other pages of the wiki system I'm setting up with wmd
+        //in your function page you have access to the global.fileCons for example using the attacklab object returned by the constructor...
+        //top.GB_show('Pujar fitxers...', wikiJSTrans + '?ruri=' + escape(wikiInject + 'wikilinker.aspx?or=y&ft=multiUpload&wfp=' + forumFPath) + '&cb=jCallBack&uuid=' + new Date().getTime(), 500, 500, myRetFunc);
+        
+    }
 
 	// This simulates a modal dialog box and asks for the URL when you
 	// click the hyperlink or image buttons.
@@ -345,7 +388,7 @@ Attacklab.wmdBase = function(attBase){
 			var cancelButton = doc.createElement("input");
 			cancelButton.type = "button";
 			cancelButton.onclick = function(){ return close(true); };
-			cancelButton.value = "Cancel";
+			cancelButton.value = "Cancelar";
 			style = cancelButton.style;
 			style.margin = "10px";
 			style.display = "inline";
@@ -476,30 +519,56 @@ Attacklab.wmdBase = function(attBase){
 		// Stored start, end and text.  Used to see if there are changes to the input.
 		var lastStart;
 		var lastEnd;
+		var lastRows = 0;
 		var markdown;
-		
-		var killHandle; // Used to cancel monitoring on destruction.
+		global.killHandle = null;
+		//var killHandle; // Used to cancel monitoring on destruction.
 		// Checks to see if anything has changed in the textarea.
 		// If so, it runs the callback.
 		this.tick = function(){
 		
-			if (!util.isVisible(inputArea)) {
-				return;
+            try
+            {		
+			    if (!util.isVisible(inputArea) || doc.getElementById("wikieditor").style.display == "none") {
+				    return;
+			    }
+    			
+    			//resize the height of the input area
+    			//this avoids scrollbars for the textarea 
+    			//and allows to keep the input and the preview to run side by side... with only one main scrollbar for the entire page
+    			var linesToMatch = inputArea.value;
+    			var lineMatches = linesToMatch.match(/\n/g);
+    			
+    		    var currRows = lineMatches.length * 20;
+    		    //
+    		    if (currRows != lastRows)
+    		    {
+	        	    inputArea.style.height = currRows + "px";
+	        	    //headerLevel = re.lastMatch.length;
+	        	    //alert(currRows);
+	        	    
+	        	    lastRows = currRows;
+	        	}
+		        
+    			
+			    // Update the selection start and end, text.
+			    if (inputArea.selectionStart || inputArea.selectionStart === 0) {
+				    var start = inputArea.selectionStart;
+				    var end = inputArea.selectionEnd;
+				    if (start != lastStart || end != lastEnd) {
+					    lastStart = start;
+					    lastEnd = end;
+    					
+					    if (markdown != inputArea.value) {
+						    markdown = inputArea.value;
+						    return true;
+					    }
+				    }
+			    }
+    			
 			}
-			
-			// Update the selection start and end, text.
-			if (inputArea.selectionStart || inputArea.selectionStart === 0) {
-				var start = inputArea.selectionStart;
-				var end = inputArea.selectionEnd;
-				if (start != lastStart || end != lastEnd) {
-					lastStart = start;
-					lastEnd = end;
-					
-					if (markdown != inputArea.value) {
-						markdown = inputArea.value;
-						return true;
-					}
-				}
+			catch(e)
+			{
 			}
 			return false;
 		};
@@ -520,11 +589,12 @@ Attacklab.wmdBase = function(attBase){
 		// Set how often we poll the textarea for changes.
 		var assignInterval = function(){
 			// previewPollInterval is set at the top of the namespace.
-			killHandle = top.setInterval(doTickCallback, interval);
+			//killHandle = top.setInterval(doTickCallback, interval);
+			global.killHandle = top.setInterval(doTickCallback, interval);
 		};
 		
 		this.destroy = function(){
-			top.clearInterval(killHandle);
+			top.clearInterval(global.killHandle);
 		};
 		
 		assignInterval();
@@ -627,7 +697,8 @@ Attacklab.wmdBase = function(attBase){
 		
 		// Push the input area state to the stack.
 		var saveState = function(){
-		
+		    try
+		    {
 			var currState = inputStateObj || new wmd.TextareaState();
 			
 			if (!currState) {
@@ -650,6 +721,8 @@ Attacklab.wmdBase = function(attBase){
 			if (callback) {
 				callback();
 			}
+			}
+			catch(e){}
 		};
 		
 		var handleCtrlYZ = function(event){
@@ -735,7 +808,7 @@ Attacklab.wmdBase = function(attBase){
 				// keyCode 90: z
 				if ((event.ctrlKey || event.metaKey) && (event.keyCode == 89 || event.keyCode == 90)) {
 					event.preventDefault();
-				}
+				} else if (event.keyCode == 9) event.preventDefault();
 			});
 			
 			var handlePaste = function(){
@@ -925,7 +998,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			var boldButton = document.createElement("li");
 			boldButton.className = "wmd-button wmd-bold-button";
-			boldButton.title = "Strong <strong> Ctrl+B";
+			boldButton.title = "Negreta <strong> Ctrl+B";
 			boldButton.XShift = "0px";
 			boldButton.textOp = command.doBold;
 			setupButton(boldButton, true);
@@ -933,19 +1006,19 @@ Attacklab.wmdBase = function(attBase){
 			
 			var italicButton = document.createElement("li");
 			italicButton.className = "wmd-button wmd-italic-button";
-			italicButton.title = "Emphasis <em> Ctrl+I";
+			italicButton.title = "Emfasis <em> Ctrl+I";
 			italicButton.XShift = "-20px";
 			italicButton.textOp = command.doItalic;
 			setupButton(italicButton, true);
 			buttonRow.appendChild(italicButton);
-
+            /*
 			var spacer1 = document.createElement("li");
 			spacer1.className = "wmd-spacer wmd-spacer1";
 			buttonRow.appendChild(spacer1); 
-
+            */
 			var linkButton = document.createElement("li");
 			linkButton.className = "wmd-button wmd-link-button";
-			linkButton.title = "Hyperlink <a> Ctrl+L";
+			linkButton.title = "Enllaç <a> Ctrl+L";
 			linkButton.XShift = "-40px";
 			linkButton.textOp = function(chunk, postProcessing, useDefaultText){
 				return command.doLinkOrImage(chunk, postProcessing, false);
@@ -955,7 +1028,7 @@ Attacklab.wmdBase = function(attBase){
 
 			var quoteButton = document.createElement("li");
 			quoteButton.className = "wmd-button wmd-quote-button";
-			quoteButton.title = "Blockquote <blockquote> Ctrl+Q";
+			quoteButton.title = "Citació <blockquote> Ctrl+Q";
 			quoteButton.XShift = "-60px";
 			quoteButton.textOp = command.doBlockquote;
 			setupButton(quoteButton, true);
@@ -963,7 +1036,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			var codeButton = document.createElement("li");
 			codeButton.className = "wmd-button wmd-code-button";
-			codeButton.title = "Code Sample <pre><code> Ctrl+K";
+			codeButton.title = "Codí font <pre><code> Ctrl+K";
 			codeButton.XShift = "-80px";
 			codeButton.textOp = command.doCode;
 			setupButton(codeButton, true);
@@ -971,21 +1044,21 @@ Attacklab.wmdBase = function(attBase){
 
 			var imageButton = document.createElement("li");
 			imageButton.className = "wmd-button wmd-image-button";
-			imageButton.title = "Image <img> Ctrl+G";
+			imageButton.title = "Imatge <img> Ctrl+G";
 			imageButton.XShift = "-100px";
 			imageButton.textOp = function(chunk, postProcessing, useDefaultText){
 				return command.doLinkOrImage(chunk, postProcessing, true);
 			};
 			setupButton(imageButton, true);
 			buttonRow.appendChild(imageButton);
-
+            /*
 			var spacer2 = document.createElement("li");
 			spacer2.className = "wmd-spacer wmd-spacer2";
 			buttonRow.appendChild(spacer2); 
-
+            */
 			var olistButton = document.createElement("li");
 			olistButton.className = "wmd-button wmd-olist-button";
-			olistButton.title = "Numbered List <ol> Ctrl+O";
+			olistButton.title = "Llista numerada <ol> Ctrl+O";
 			olistButton.XShift = "-120px";
 			olistButton.textOp = function(chunk, postProcessing, useDefaultText){
 				command.doList(chunk, postProcessing, true, useDefaultText);
@@ -995,7 +1068,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			var ulistButton = document.createElement("li");
 			ulistButton.className = "wmd-button wmd-ulist-button";
-			ulistButton.title = "Bulleted List <ul> Ctrl+U";
+			ulistButton.title = "Llista normal <ul> Ctrl+U";
 			ulistButton.XShift = "-140px";
 			ulistButton.textOp = function(chunk, postProcessing, useDefaultText){
 				command.doList(chunk, postProcessing, false, useDefaultText);
@@ -1005,7 +1078,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			var headingButton = document.createElement("li");
 			headingButton.className = "wmd-button wmd-heading-button";
-			headingButton.title = "Heading <h1>/<h2> Ctrl+H";
+			headingButton.title = "Títol <h1>/<h2> Ctrl+H";
 			headingButton.XShift = "-160px";
 			headingButton.textOp = command.doHeading;
 			setupButton(headingButton, true);
@@ -1013,16 +1086,16 @@ Attacklab.wmdBase = function(attBase){
 			
 			var hrButton = document.createElement("li");
 			hrButton.className = "wmd-button wmd-hr-button";
-			hrButton.title = "Horizontal Rule <hr> Ctrl+R";
+			hrButton.title = "Separació horizontal <hr> Ctrl+R";
 			hrButton.XShift = "-180px";
 			hrButton.textOp = command.doHorizontalRule;
 			setupButton(hrButton, true);
 			buttonRow.appendChild(hrButton); 
-			
+			/*
 			var spacer3 = document.createElement("li");
 			spacer3.className = "wmd-spacer wmd-spacer3";
 			buttonRow.appendChild(spacer3); 
-			
+			*/
 			var undoButton = document.createElement("li");
 			undoButton.className = "wmd-button wmd-undo-button";
 			undoButton.title = "Undo - Ctrl+Z";
@@ -1049,6 +1122,39 @@ Attacklab.wmdBase = function(attBase){
 			};
 			setupButton(redoButton, true);
 			buttonRow.appendChild(redoButton); 
+
+
+            /*mod: button test mod*/
+			var sChrBtn = document.createElement("li");
+			sChrBtn.className = "wmd-button wmd-schrbtn-button";
+			/*sChrBtn.id = "wmd-schrbtn-button";*/
+			sChrBtn.title = "Caracters especials Ctrl+W";
+			sChrBtn.XShift = "-260px";
+			//sChrBtn.textOp = command.doHeading;
+			
+			sChrBtn.textOp = function(chunk, postProcessing, useDefaultText){
+				return command.doSpecChars(chunk, postProcessing);
+			};
+			setupButton(sChrBtn, true);
+			buttonRow.appendChild(sChrBtn); 
+            /*mod: end*/
+
+            /*mod: button test mod*/
+			var sFileBtn = document.createElement("li");
+			sFileBtn.className = "wmd-button wmd-filemanager-button";
+			/*sFileBtn.id = "wmd-filemanager-button";*/
+			sFileBtn.title = "Enllaços interns";
+			sFileBtn.XShift = "-280px";
+			//sChrBtn.textOp = command.doHeading;
+			
+			sFileBtn.textOp = function(chunk, postProcessing, useDefaultText){
+				return command.doFileManager(chunk, postProcessing);
+			};
+			setupButton(sFileBtn, true);
+			buttonRow.appendChild(sFileBtn); 
+            /*mod: end*/
+
+
 			
 			var helpButton = document.createElement("li");
 			helpButton.className = "wmd-button wmd-help-button";
@@ -1063,6 +1169,28 @@ Attacklab.wmdBase = function(attBase){
 			
 			setupButton(helpButton, true);
 			buttonRow.appendChild(helpButton);
+
+
+            /*mod: button test mod*/
+            //add your own save routine here...
+            //I'm using a button object but you may hook up whatever you want
+            if (top.document.getElementById('btn' + global.edContext + 'save') != null)
+            {
+		        var sSaveBtn = document.createElement("li");
+		        sSaveBtn.className = "wmd-button wmd-save-button";
+        		
+		        sSaveBtn.title = "Guardar";
+		        
+		        sSaveBtn.XShift = "-300px";
+		        sSaveBtn.textOp = function(chunk, postProcessing, useDefaultText){
+		            top.document.getElementById('btn' + global.edContext + 'save').click();
+		            return false;
+		        };
+        		
+		        setupButton(sSaveBtn, true);
+		        buttonRow.appendChild(sSaveBtn); 
+		    }
+            /*mod: end*/
 			
 			setUndoRedoButtonStates();
 		}
@@ -1162,6 +1290,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			// Auto-continue lists, code blocks and block quotes when
 			// the enter key is pressed.
+			/*
 			util.addEvent(inputBox, "keyup", function(key){
 				if (!key.shiftKey && !key.ctrlKey && !key.metaKey) {
 					var keyCode = key.charCode || key.keyCode;
@@ -1173,6 +1302,44 @@ Attacklab.wmdBase = function(attBase){
 					}
 				}
 			});
+			*/
+			//returned to default behaviour of original wmd for lists
+			//Enter produces newline (br) in nearly every context. 
+			//That's what the user expects in most cases
+			//Shift+Enter is the only thing he needs to learn...
+			util.addEvent(inputBox, "keyup", function(key){
+				if (key.shiftKey && !key.ctrlKey && !key.metaKey) {
+					var keyCode = key.charCode || key.keyCode;
+					// Key code 13 is Enter
+					if (keyCode === 13) {
+						fakeButton = {};
+						fakeButton.textOp = command.doAutoindent;
+						doClick(fakeButton);
+					}
+					
+                    else if (keyCode === 9) {
+						fakeButton = {};
+						fakeButton.textOp = command.doUnTab;
+						doClick(fakeButton);
+					}
+
+				}
+			});
+
+			util.addEvent(inputBox, keyEvent, function(key){
+				if (!key.shiftKey && !key.ctrlKey && !key.metaKey) {
+					var keyCode = key.charCode || key.keyCode;
+					// Key code 13 is Enter
+					if (keyCode === 9) {
+						fakeButton = {};
+						fakeButton.textOp = command.doTab;
+						doClick(fakeButton);
+					}
+				}
+			});
+
+
+			
 			
 			// Disable ESC clearing the input textarea on IE
 			if (global.isIE) {
@@ -1204,7 +1371,10 @@ Attacklab.wmdBase = function(attBase){
                     var markdownConverter = new wmd.showdown.converter();
                 }
                 var text = inputBox.value;
-
+                //switch(
+                //that's what I needed
+                //if (doc.getElementById("atextarea") != null) doc.getElementById("atextarea").value = inputBox.value;            
+                
                 var callback = function(){
                     inputBox.value = text;
                 };
@@ -1215,6 +1385,11 @@ Attacklab.wmdBase = function(attBase){
                         top.setTimeout(callback, 0);
                     }
                 }
+            }
+            else 
+            {    			
+                //that's what I needed
+                //if (doc.getElementById("atextarea") != null) doc.getElementById("atextarea").value = inputBox.value;            
             }
 			return true;
 		};
@@ -1263,17 +1438,23 @@ Attacklab.wmdBase = function(attBase){
 		var inputArea = wmd.panels.input;
 		
 		this.init = function() {
-		
+
 			if (!util.isVisible(inputArea)) {
 				return;
 			}
-				
-			this.setInputAreaSelectionStartEnd();
-			this.scrollTop = inputArea.scrollTop;
-			if (!this.text && inputArea.selectionStart || inputArea.selectionStart === 0) {
-				this.text = inputArea.value;
+		    /*
+			if (!util.isVisible(inputArea)) {
+				return;
 			}
-			
+			*/	
+			try
+			{
+			    this.setInputAreaSelectionStartEnd();
+			    this.scrollTop = inputArea.scrollTop;
+			    if (!this.text && inputArea.selectionStart || inputArea.selectionStart === 0) {
+				    this.text = inputArea.value;
+			    }
+            } catch(e){};			
 		}
 		
 		// Sets the selected text in the input box after we've performed an
@@ -1309,52 +1490,57 @@ Attacklab.wmdBase = function(attBase){
 		
 		this.setInputAreaSelectionStartEnd = function(){
 		
-			if (inputArea.selectionStart || inputArea.selectionStart === 0) {
-			
-				stateObj.start = inputArea.selectionStart;
-				stateObj.end = inputArea.selectionEnd;
-			}
-			else if (doc.selection) {
-				
-				stateObj.text = util.fixEolChars(inputArea.value);
-				
-				// IE loses the selection in the textarea when buttons are
-				// clicked.  On IE we cache the selection and set a flag
-				// which we check for here.
-				var range;
-				if(wmd.ieRetardedClick && wmd.ieCachedRange) {
-					range = wmd.ieCachedRange;
-					wmd.ieRetardedClick = false;
-				}
-				else {
-					range = doc.selection.createRange();
-				}
+		    try
+		    {
+		
+			    if (inputArea.selectionStart || inputArea.selectionStart === 0) {
+    			
+				    stateObj.start = inputArea.selectionStart;
+				    stateObj.end = inputArea.selectionEnd;
+			    }
+			    else if (doc.selection) {
+    				
+				    stateObj.text = util.fixEolChars(inputArea.value);
+    				
+				    // IE loses the selection in the textarea when buttons are
+				    // clicked.  On IE we cache the selection and set a flag
+				    // which we check for here.
+				    var range;
+				    if(wmd.ieRetardedClick && wmd.ieCachedRange) {
+					    range = wmd.ieCachedRange;
+					    wmd.ieRetardedClick = false;
+				    }
+				    else {
+					    range = doc.selection.createRange();
+				    }
 
-				var fixedRange = util.fixEolChars(range.text);
-				var marker = "\x07";
-				var markedRange = marker + fixedRange + marker;
-				range.text = markedRange;
-				var inputText = util.fixEolChars(inputArea.value);
-					
-				range.moveStart("character", -markedRange.length);
-				range.text = fixedRange;
+				    var fixedRange = util.fixEolChars(range.text);
+				    var marker = "\x07";
+				    var markedRange = marker + fixedRange + marker;
+				    range.text = markedRange;
+				    var inputText = util.fixEolChars(inputArea.value);
+    					
+				    range.moveStart("character", -markedRange.length);
+				    range.text = fixedRange;
 
-				stateObj.start = inputText.indexOf(marker);
-				stateObj.end = inputText.lastIndexOf(marker) - marker.length;
-					
-				var len = stateObj.text.length - util.fixEolChars(inputArea.value).length;
-					
-				if (len) {
-					range.moveStart("character", -fixedRange.length);
-					while (len--) {
-						fixedRange += "\n";
-						stateObj.end += 1;
-					}
-					range.text = fixedRange;
-				}
-					
-				this.setInputAreaSelection();
-			}
+				    stateObj.start = inputText.indexOf(marker);
+				    stateObj.end = inputText.lastIndexOf(marker) - marker.length;
+    					
+				    var len = stateObj.text.length - util.fixEolChars(inputArea.value).length;
+    					
+				    if (len) {
+					    range.moveStart("character", -fixedRange.length);
+					    while (len--) {
+						    fixedRange += "\n";
+						    stateObj.end += 1;
+					    }
+					    range.text = fixedRange;
+				    }
+    					
+				    this.setInputAreaSelection();
+			    }
+	        }
+	        catch(e){}
 		};
 		
 		// Restore this state into the input area.
@@ -1701,7 +1887,7 @@ Attacklab.wmdBase = function(attBase){
 			// Marks up the link and adds the ref.
 			var makeLinkMarkdown = function(link){
 			
-				if (link !== null) {
+				if (link !== null && link !== "http://" && link !== "https://" && link !== "ftp://" && link !== "mailto:") {
 				
 					chunk.startTag = chunk.endTag = "";
 					var linkDef = " [999]: " + link;
@@ -1712,13 +1898,14 @@ Attacklab.wmdBase = function(attBase){
 					
 					if (!chunk.selection) {
 						if (isImage) {
-							chunk.selection = "alt text";
+							chunk.selection = "text alternatiu";
 						}
 						else {
-							chunk.selection = "link text";
+							chunk.selection = "text enllaç";
 						}
 					}
 				}
+				else if (link !== null) alert("Falta un enllaç vàlid");
 				postProcessing();
 			};
 			
@@ -1731,6 +1918,114 @@ Attacklab.wmdBase = function(attBase){
 			return true;
 		}
 	};
+
+
+	command.doFileManager = function(chunk, postProcessing){
+	
+		chunk.trimWhitespace();
+		chunk.findTags(/\s*!?\[/, /\][ ]?(?:\n[ ]*)?(\[.*?\])?/);
+		
+		if (chunk.endTag.length > 1) {
+		
+			chunk.startTag = chunk.startTag.replace(/!?\[/, "");
+			chunk.endTag = "";
+			command.addLinkDef(chunk, null);
+			
+		}
+		else {
+		
+			if (/\n\n/.test(chunk.selection)) {
+				command.addLinkDef(chunk, null);
+				return;
+			}
+			
+			// The function to be executed when you enter a link and press OK or Cancel.
+			// Marks up the link and adds the ref.
+			var makeLinkMarkdown = function(link, isImage){
+			
+				if (link !== null) {
+				
+					chunk.startTag = chunk.endTag = "";
+					var linkDef = " [999]: " + link;
+					
+					var num = command.addLinkDef(chunk, linkDef);
+					chunk.startTag = isImage ? "![" : "[";
+					chunk.endTag = "][" + num + "]";
+					
+					if (!chunk.selection) {
+						if (isImage) {
+							chunk.selection = "text alternatiu";
+						}
+						else {
+							chunk.selection = "text enllaç";
+						}
+					}
+				}
+				postProcessing();
+			};
+			
+	        chunk.findTags(/\n(.*?)<([^>]*)/, /([^<]*)>(.*?)\n$/);
+            //alert(chunk.startTag + " : " + chunk.startTag.length + "\n" + chunk.endTag + " : " + chunk.endTag.length);	
+    	    
+            if ((chunk.startTag === chunk.endTag && chunk.endTag == ""))
+            {
+                util.filemanager(makeLinkMarkdown);
+	    	    return true;
+            }
+		    else
+		    {
+                alert("Possible conflicte per estar adins de tags html...");		    
+                return false;
+	        }
+			
+			
+			/*
+			if (isImage) {
+				util.prompt(imageDialogText, imageDefaultText, makeLinkMarkdown);
+			}
+			else {
+				util.prompt(linkDialogText, linkDefaultText, makeLinkMarkdown);
+			}
+			*/
+			//return true;
+		}
+
+		
+	};
+
+
+    command.doSpecChars = function(chunk, postProcessing) {
+		
+		var insSpecChr = function(specialChar){
+		
+            if (specialChar !== null) {
+                    chunk.selection = specialChar;
+                    postProcessing();
+			}
+		};
+        chunk.trimWhitespace();
+	    chunk.findTags(/\n(.*?)<([^>]*)/, /([^<]*)>(.*?)\n$/);
+        //alert(chunk.startTag + " : " + chunk.startTag.length + "\n" + chunk.endTag + " : " + chunk.endTag.length);	
+	    
+        if ((chunk.startTag === chunk.endTag && chunk.endTag == ""))
+        {
+            util.extern(insSpecChr);
+	    	return true;
+        }
+		else
+		{
+            alert("Possible conflicte per estar adins de tags html...");		    
+            return false;
+	    }
+	    
+		
+		
+		
+		
+
+
+    };
+
 	
 	util.makeAPI = function(){
 		wmd.wmd = {};
@@ -1989,6 +2284,46 @@ Attacklab.wmdBase = function(attBase){
 			}
 		}
 	};
+
+	// Tab support.
+	command.doTab = function(chunk, postProcessing, useDefaultText){
+	    
+		if(!chunk.selection && chunk.before.search(/(\n|^|\n[ ]{4,})/) == 0)
+		    chunk.before += "    ";
+		else if (chunk.selection)
+		{
+    		if(chunk.before.search(/(\n|^|\n[ ]{4,})/) == 0)
+		        chunk.before += "    ";
+		    chunk.selection = chunk.selection.replace(/\n/g,"\n    ");
+		    chunk.selection = chunk.selection.replace(/\n[ ]{4,}$/g,"\n");
+		}
+	};
+
+	// shift tab support.
+	command.doUnTab = function(chunk, postProcessing, useDefaultText){
+	    //alert("working");
+	    if (!chunk.selection)
+	    {
+	        //alert(chunk.before);
+	        chunk.before = chunk.before.replace(/[ ]{4}$/,"");
+            /*
+            if(/^\n(.*)(\t|[ ]{4,})/.test(chunk.before))
+            {
+                alert("in");
+                chunk.before.replace(/^\n(.*)(\t|[ ]{4,})/,"\n$1"); 
+            }
+            */
+            //else if(/([^\n])(\t|[ ]{4,}).*\n$/.test(chunk.before))
+            //    chunk.before.replace(/([^\n])(\t|[ ]{4,})(.*)\n$/,"$1$3\n"); 
+            //else if(/(<code>).*\n$/.test(chunk.before) && /.*(</code>)\n$/.test(chunk.after)){
+            //    chunk.before.replace(/([^\n])(\t|[ ]{4,})(.*)\n$/,"$1$3\n"; 
+        }   
+        else if (chunk.selection)
+        {
+            chunk.before = chunk.before.replace(/[ ]{4}$/,"");
+            chunk.selection = chunk.selection.replace(/\n[ ]{4}/g,"\n");
+        }
+	};
 	
 	command.doBlockquote = function(chunk, postProcessing, useDefaultText){
 		
@@ -2005,7 +2340,7 @@ Attacklab.wmdBase = function(attBase){
 				return "";
 			});
 		
-		var defaultText = useDefaultText ? "Blockquote" : "";
+		var defaultText = useDefaultText ? "Citació" : "";
 		chunk.selection = chunk.selection.replace(/^(\s|>)+$/ ,"");
 		chunk.selection = chunk.selection || defaultText;
 		
@@ -2105,7 +2440,7 @@ Attacklab.wmdBase = function(attBase){
 			
 			if(!chunk.selection){
 				chunk.startTag = "    ";
-				chunk.selection = useDefaultText ? "enter code here" : "";
+				chunk.selection = useDefaultText ? "Codí font" : "";
 			}
 			else {
 				if(/^[ ]{0,3}\S/m.test(chunk.selection)){
@@ -2125,7 +2460,7 @@ Attacklab.wmdBase = function(attBase){
 			if(!chunk.startTag && !chunk.endTag){
 				chunk.startTag = chunk.endTag="`";
 				if(!chunk.selection){
-					chunk.selection = useDefaultText ? "enter code here" : "";
+					chunk.selection = useDefaultText ? "Codí font" : "";
 				}
 			}
 			else if(chunk.endTag && !chunk.startTag){
@@ -2219,7 +2554,7 @@ Attacklab.wmdBase = function(attBase){
 			});
 			
 		if(!chunk.selection){
-			chunk.selection = useDefaultText ? "List item" : " ";
+			chunk.selection = useDefaultText ? "Entrada" : " ";
 		}
 		
 		var prefix = getItemPrefix();
@@ -2240,19 +2575,27 @@ Attacklab.wmdBase = function(attBase){
 		chunk.selection = chunk.selection.replace(/\n/g, "\n" + spaces);
 		
 	};
-	
+
+    //modified doHeading with support for <h1 to h6> and undo	
 	command.doHeading = function(chunk, postProcessing, useDefaultText){
 		
+		//chunk.trimWhitespace();
 		// Remove leading/trailing whitespace and reduce internal spaces to single spaces.
+		var chunkOrigSel = chunk.selection;
 		chunk.selection = chunk.selection.replace(/\s+/g, " ");
 		chunk.selection = chunk.selection.replace(/(^\s+|\s+$)/g, "");
-		
+		var firstChr = chunk.selection.substring(0, 1);
 		// If we clicked the button with no selected text, we just
 		// make a level 2 hash header around some default text.
 		if(!chunk.selection){
-			chunk.startTag = "## ";
+            chunk.findTags(/[^\n]/, /[^\n]/);		
+		    if(/[^\n]/.test(chunk.startTag))
+    			chunk.startTag += "\n\n## ";
+    		else chunk.startTag = "## ";
 			chunk.selection = "Heading";
-			chunk.endTag = " ##";
+		    if(/[^\n]/.test(chunk.startTag))
+    			chunk.endTag = " ##\n\n" + chunk.endTag;
+    		else chunk.endTag = " ##";
 			return;
 		}
 		
@@ -2265,40 +2608,71 @@ Attacklab.wmdBase = function(attBase){
 		}
 		chunk.startTag = chunk.endTag = "";
 		
-		// Try to get the current header level by looking for - and = in the line
-		// below the selection.
-		chunk.findTags(null, /\s?(-+|=+)/);
-		if(/=+/.test(chunk.endTag)){
-			headerLevel = 1;
-		}
-		if(/-+/.test(chunk.endTag)){
-			headerLevel = 2;
+		var addNewLine = "";
+		if (headerLevel == 0)
+		{
+            chunk.findTags(/[^\n]/, null);		
+		    if(/[^\n]/.test(chunk.startTag)){
+			    addNewLine = chunk.startTag.substring(0,1);
+		    }
+		    chunk.startTag = chunk.endTag = "";
 		}
 		
-		// Skip to the next line so we can create the header markdown.
-		chunk.startTag = chunk.endTag = "";
-		chunk.addBlankLines(1, 1);
-
-		// We make a level 2 header if there is no current header.
-		// If there is a header level, we substract one from the header level.
-		// If it's already a level 1 header, it's removed.
-		var headerLevelToCreate = headerLevel == 0 ? 2 : headerLevel - 1;
-		
-		if(headerLevelToCreate > 0){
-			
-			// The button only creates level 1 and 2 underline headers.
-			// Why not have it iterate over hash header levels?  Wouldn't that be easier and cleaner?
-			var headerChar = headerLevelToCreate >= 2 ? "-" : "=";
-			var len = chunk.selection.length;
-			if(len > wmd.wmd_env.lineLength){
-				len = wmd.wmd_env.lineLength;
-			}
-			chunk.endTag = "\n";
-			while(len--){
-				chunk.endTag += headerChar;
-			}
+		var removeNewLines = false;
+		if (headerLevel < 6) headerLevel++;
+		else if (headerLevel == 6) 
+		{
+		    headerLevel = 0;
+		    removeNewLines = true;
 		}
+		
+		var headerChar = "#";
+		var len = headerLevel;
+		if (headerLevel > 0)
+		{
+		    if (headerLevel == 1 && addNewLine != "") 
+		    {
+		        chunk.startTag = addNewLine.replace(/\s+/g, "") + "\n\n";
+		    }
+		    chunk.endTag = " ";
+		    while(len--){
+			    chunk.endTag += headerChar;
+			    chunk.startTag += headerChar;
+		    }
+		    chunk.startTag += " ";
+	
+		    if (headerLevel == 1) 
+		    {
+		        chunk.endTag += "\n\n";
+		        chunk.selection = firstChr + chunk.selection;
+		    }
+		    
+		}
+		else
+		{
+            chunk.findTags(/[\n]+/, /[\n]+/);		
+	        if(/[\n]+/.test(chunk.startTag)){
+		        chunk.startTag = "";
+	        }
+	        if(/[\n]+/.test(chunk.endTag)){
+		        chunk.endTag = "";
+	        }
+            chunk.selection = chunkOrigSel;		
+            chunk.findTags(/[^\n]/, /[^\n]/);		
+	        if(/[^\n]/.test(chunk.startTag)){
+		        chunk.startTag = chunk.startTag.substring(0,1) + " ";
+		        chunk.startTag = chunk.startTag.replace(/\s+/g, " ");
+	        }
+	        if(/[^\n]/.test(chunk.endTag)){
+		        chunk.endTag = " " + chunk.endTag.substring(0,1);
+		        chunk.endTag = chunk.endTag.replace(/\s+/g, " ");
+	        }
+            chunk.selection = chunkOrigSel;			
+		}
+	
 	};	
+
+
 	
 	command.doHorizontalRule = function(chunk, postProcessing, useDefaultText){
 		chunk.startTag = "----------\n";
@@ -2310,7 +2684,7 @@ Attacklab.wmdBase = function(attBase){
 
 Attacklab.wmd_env = {};
 Attacklab.account_options = {};
-Attacklab.wmd_defaults = {version:1, output:"HTML", lineLength:40, delayLoad:false, convertInputBeforeSubmit: true};
+Attacklab.wmd_defaults = {version:1, output:"HTML", lineLength:40, delayLoad:false, convertInputBeforeSubmit: false};
 
 var newAttacklab = function() {
     myAttack = {};
@@ -2350,15 +2724,18 @@ var newAttacklab = function() {
     return myAttack;
 }
 
-function createWmd(textarea, preview)
+
+//return attacklab instead of editor
+//this allows us to avoid errors using ajax callbacks 
+function createWmd(textarea, preview, edCon)
 {
     if (!Attacklab) {
-        alert("WMD hasn't finished loading!");
+        alert("WMD està carregant...!");
         return null;
     }
 
     if(!jQuery) {
-        alert("This version of WMD requires jQuery.");
+        alert("Aquesta versió de WMD necesita jQuery.");
         return null;
     }
 
@@ -2370,8 +2747,26 @@ function createWmd(textarea, preview)
     };
 
     var attacklab = newAttacklab();
+    attacklab.Global.edContext = edCon;
     var previewManager = new attacklab.wmd.previewManager(panes);
+    
     var editor = new attacklab.wmd.editor(domTextarea, previewManager.refresh);
-    return editor;
+    //I used wmdInstance to get access to the attacklab functions
+    //once I've created at least one instance
+    //if (wmdInstance == null) wmdInstance = attacklab;
+
+
+    //When you have several instances on one page
+    //it's sometimes important to kill the instance to avoid errors
+    //this happened to me especially when I tried to update the whole editor region
+    //with ajax callbacks switching for example from one document to another.
+    //As I didn't wanted to reload the whole page the events got mad and produced errors...
+    //Combined with try catch and setting the editor instance to null
+    //you can re-create the editor object and everything you need arround (title field, comments, etc.)
+    //with two lines of code.
+    //For this reason I return the whole object and not only the editor...
+    //Additionally you get access to all the other instance specific stuff and variables 
+    //which allows you to enhance the editor
+    return attacklab;
 }
 
